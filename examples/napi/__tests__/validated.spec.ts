@@ -1,6 +1,12 @@
 import test from 'ava'
 
-import { acceptValidatedObject, createValidatedObject, acceptDeepValidatedObject } from '../index.cjs'
+import {
+  acceptValidatedObject,
+  createValidatedObject,
+  acceptDeepValidatedObject,
+  saveUserToCustomDb,
+  validateAndProcessDynamic
+} from '../index.cjs'
 
 test('should be able to accept validated object', (t) => {
   const obj = {
@@ -60,4 +66,30 @@ test('should be able to create validated object', (t) => {
   const obj = createValidatedObject()
   t.is(obj.name, 'hello')
   t.is(obj.nested.count, 42)
+})
+
+test('CustomDB save user example', (t) => {
+  const user = {
+    id: 123,
+    profile: {
+      username: 'jules',
+      email: 'jules@example.com'
+    },
+    tags: ['rust', 'napi']
+  }
+  t.is(saveUserToCustomDb(user), 'Saved user jules with ID 123')
+})
+
+test('dynamic validation parse example', (t) => {
+  const user = {
+    id: 456,
+    profile: {
+      username: 'dynamic',
+      email: 'dynamic@example.com'
+    },
+    tags: []
+  }
+  t.is(validateAndProcessDynamic(user), 'Dynamic validation successful for user ID 456')
+
+  t.throws(() => validateAndProcessDynamic({ id: 'not a number' } as any))
 })

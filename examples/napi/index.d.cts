@@ -1045,6 +1045,11 @@ export interface PluginLoadResult {
 
 export declare function plusOne(this: Width): number
 
+export interface ProfileSchema {
+  username: string
+  email: string
+}
+
 export declare function promiseInEither(input: number | Promise<number>): Promise<boolean>
 
 export declare function promiseRawReturnClassInstance(): Promise<ClassReturnInPromise>
@@ -1145,6 +1150,14 @@ export type RuleHandler<Args, Ret> =
   (arg: Args) => Ret
 
 export declare function runScript(script: string): unknown
+
+/**
+ * A hypothetical "CustomDB" that saves a user.
+ * By using `Validated<UserSchema>`, we ensure the JS object matches the schema
+ * without copying the entire object into a Rust struct.
+ * This is "zero-copy" in the sense that we only read the fields we need.
+ */
+export declare function saveUserToCustomDb(user: UserSchema): string
 
 export declare function setNullByteProperty(obj: object): void
 
@@ -1307,10 +1320,18 @@ export interface UseNullableStruct {
   nullableStringField: string | null
 }
 
+export interface UserSchema {
+  id: number
+  profile: ProfileSchema
+  tags: Array<string>
+}
+
 export interface UtcDates {
   start: Date
   end?: Date
 }
+
+export declare function validateAndProcessDynamic(input: unknown): string
 
 export declare function validateArray(arr: Array<number>): number
 
