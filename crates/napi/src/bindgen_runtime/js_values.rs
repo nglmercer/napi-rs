@@ -33,6 +33,7 @@ mod stream;
 mod string;
 mod symbol;
 mod task;
+mod validated;
 mod value_ref;
 
 pub use crate::js_values::Unknown;
@@ -57,6 +58,7 @@ pub use stream::*;
 pub use string::*;
 pub use symbol::*;
 pub use task::*;
+pub use validated::*;
 pub use value_ref::*;
 
 pub trait TypeName {

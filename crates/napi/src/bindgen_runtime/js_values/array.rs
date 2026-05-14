@@ -303,7 +303,7 @@ where
 
 impl<T> ValidateNapiValue for Vec<T>
 where
-  T: FromNapiValue,
+  T: FromNapiValue + ValidateNapiValue,
 {
   unsafe fn validate(env: sys::napi_env, napi_val: sys::napi_value) -> Result<sys::napi_value> {
     let mut is_array = false;
@@ -317,6 +317,22 @@ where
         "Expected an array".to_owned(),
       ));
     }
+
+    let mut length = 0;
+    check_status!(
+      unsafe { sys::napi_get_array_length(env, napi_val, &mut length) },
+      "Failed to get array length"
+    )?;
+
+    for i in 0..length {
+      let mut element = ptr::null_mut();
+      check_status!(
+        unsafe { sys::napi_get_element(env, napi_val, i, &mut element) },
+        "Failed to get array element"
+      )?;
+      T::validate(env, element)?;
+    }
+
     Ok(ptr::null_mut())
   }
 }

@@ -398,6 +398,7 @@ static KNOWN_TYPES: LazyLock<HashMap<&'static str, (&'static str, bool, bool)>> 
       ("Rc", ("{}", false, false)),
       ("Arc", ("{}", false, false)),
       ("Mutex", ("{}", false, false)),
+      ("Validated", ("{}", false, false)),
     ]);
 
     map

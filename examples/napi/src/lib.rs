@@ -102,3 +102,4 @@ mod transparent;
 mod r#type;
 mod typed_array;
 mod wasm;
+mod validated;

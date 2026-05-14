@@ -710,6 +710,35 @@ impl NapiStruct {
         )
       };
 
+    let mut field_js_names = vec![];
+    let mut field_js_names_len = vec![];
+    let mut is_optional_fields = vec![];
+    let mut field_types = vec![];
+
+    for field in obj.fields.iter() {
+      let field_js_name = &field.js_name;
+      field_js_names.push(field_js_name.clone());
+      field_js_names_len.push(field_js_name.len());
+
+      let mut ty = field.ty.clone();
+      remove_lifetime_in_type(&mut ty);
+      let is_optional_field = if let syn::Type::Path(syn::TypePath {
+        path: syn::Path { segments, .. },
+        ..
+      }) = &ty
+      {
+        if let Some(last_path) = segments.last() {
+          last_path.ident == "Option"
+        } else {
+          false
+        }
+      } else {
+        false
+      };
+      is_optional_fields.push(is_optional_field);
+      field_types.push(ty);
+    }
+
     // Generate object creation code
     let object_creation = if conditional_setters.is_empty() {
       // All fields are always set - use fully batched approach
@@ -786,7 +815,56 @@ impl NapiStruct {
         }
 
         #[automatically_derived]
-        #validate_napi_value_impl {}
+        #validate_napi_value_impl {
+          unsafe fn validate(
+            env: napi::bindgen_prelude::sys::napi_env,
+            napi_val: napi::bindgen_prelude::sys::napi_value
+          ) -> napi::bindgen_prelude::Result<napi::bindgen_prelude::sys::napi_value> {
+            let mut value_type = -1;
+            napi::check_status!(
+              unsafe { napi::sys::napi_typeof(env, napi_val, &mut value_type) },
+              "Failed to get type of napi value"
+            )?;
+            if value_type != napi::sys::ValueType::napi_object {
+              return Err(napi::Error::new(
+                napi::Status::InvalidArg,
+                format!("Expect value to be object, but received {}", napi::bindgen_prelude::ValueType::from(value_type))
+              ));
+            }
+
+            #(
+              {
+                let field_name = std::ffi::CStr::from_bytes_with_nul_unchecked(concat!(#field_js_names, "\0").as_bytes());
+                let mut property_value = std::ptr::null_mut();
+                napi::check_status!(
+                  unsafe {
+                    napi::sys::napi_get_named_property(env, napi_val, field_name.as_ptr(), &mut property_value)
+                  },
+                  "Failed to get property"
+                )?;
+
+                let mut property_value_type = -1;
+                napi::check_status!(
+                  unsafe { napi::sys::napi_typeof(env, property_value, &mut property_value_type) },
+                  "Failed to get type of property value"
+                )?;
+
+                if property_value_type == napi::sys::ValueType::napi_undefined || property_value_type == napi::sys::ValueType::napi_null {
+                  if !#is_optional_fields {
+                    return Err(napi::Error::new(
+                      napi::Status::InvalidArg,
+                      format!("Missing required property `{}`", #field_js_names)
+                    ));
+                  }
+                } else {
+                  <#field_types as napi::bindgen_prelude::ValidateNapiValue>::validate(env, property_value)?;
+                }
+              }
+            )*
+
+            Ok(std::ptr::null_mut())
+          }
+        }
       }
     } else {
       quote! {}
@@ -1005,6 +1083,7 @@ impl NapiStruct {
 
     let mut variant_arm_setters = vec![];
     let mut variant_arm_getters = vec![];
+    let mut variant_arm_validators = vec![];
 
     for variant in structured_enum.variants.iter() {
       let variant_name = &variant.name;
@@ -1244,7 +1323,63 @@ impl NapiStruct {
           #(#obj_field_getters)*
           #destructed_fields
         },
-      })
+      });
+
+      let mut variant_field_validators = vec![];
+      for field in variant.fields.iter() {
+        let field_js_name = &field.js_name;
+        let mut ty = field.ty.clone();
+        remove_lifetime_in_type(&mut ty);
+        let is_optional_field = if let syn::Type::Path(syn::TypePath {
+          path: syn::Path { segments, .. },
+          ..
+        }) = &ty
+        {
+          if let Some(last_path) = segments.last() {
+            last_path.ident == "Option"
+          } else {
+            false
+          }
+        } else {
+          false
+        };
+
+        variant_field_validators.push(quote! {
+          {
+            let field_name = std::ffi::CStr::from_bytes_with_nul_unchecked(concat!(#field_js_name, "\0").as_bytes());
+            let mut property_value = std::ptr::null_mut();
+            napi::check_status!(
+              unsafe {
+                napi::sys::napi_get_named_property(env, napi_val, field_name.as_ptr(), &mut property_value)
+              },
+              "Failed to get property"
+            )?;
+
+            let mut property_value_type = -1;
+            napi::check_status!(
+              unsafe { napi::sys::napi_typeof(env, property_value, &mut property_value_type) },
+              "Failed to get type of property value"
+            )?;
+
+            if property_value_type == napi::sys::ValueType::napi_undefined || property_value_type == napi::sys::ValueType::napi_null {
+              if !#is_optional_field {
+                return Err(napi::Error::new(
+                  napi::Status::InvalidArg,
+                  format!("Missing required property `{}`", #field_js_name)
+                ));
+              }
+            } else {
+              <#ty as napi::bindgen_prelude::ValidateNapiValue>::validate(env, property_value)?;
+            }
+          }
+        });
+      }
+
+      variant_arm_validators.push(quote! {
+        #variant_name_str => {
+          #(#variant_field_validators)*
+        }
+      });
     }
 
     let to_napi_value = if structured_enum.object_to_js {
@@ -1291,7 +1426,57 @@ impl NapiStruct {
           }
         }
 
-        impl napi::bindgen_prelude::ValidateNapiValue for #name {}
+        impl napi::bindgen_prelude::ValidateNapiValue for #name {
+          unsafe fn validate(
+            env: napi::bindgen_prelude::sys::napi_env,
+            napi_val: napi::bindgen_prelude::sys::napi_value
+          ) -> napi::bindgen_prelude::Result<napi::bindgen_prelude::sys::napi_value> {
+            let mut value_type = -1;
+            napi::check_status!(
+              unsafe { napi::sys::napi_typeof(env, napi_val, &mut value_type) },
+              "Failed to get type of napi value"
+            )?;
+            if value_type != napi::sys::ValueType::napi_object {
+              return Err(napi::Error::new(
+                napi::Status::InvalidArg,
+                format!("Expect value to be object, but received {}", napi::bindgen_prelude::ValueType::from(value_type))
+              ));
+            }
+
+            let discriminant_name = std::ffi::CStr::from_bytes_with_nul_unchecked(concat!(#discriminant, "\0").as_bytes());
+            let mut discriminant_value = std::ptr::null_mut();
+            napi::check_status!(
+              unsafe {
+                napi::sys::napi_get_named_property(env, napi_val, discriminant_name.as_ptr(), &mut discriminant_value)
+              },
+              "Failed to get discriminant property"
+            )?;
+
+            let mut discriminant_type = -1;
+            napi::check_status!(
+              unsafe { napi::sys::napi_typeof(env, discriminant_value, &mut discriminant_type) },
+              "Failed to get type of discriminant value"
+            )?;
+
+            if discriminant_type != napi::sys::ValueType::napi_string {
+              return Err(napi::Error::new(
+                napi::Status::InvalidArg,
+                format!("Expect discriminant to be string, but received {}", napi::bindgen_prelude::ValueType::from(discriminant_type))
+              ));
+            }
+
+            let type_: String = <String as napi::bindgen_prelude::FromNapiValue>::from_napi_value(env, discriminant_value)?;
+            match type_.as_str() {
+              #(#variant_arm_validators)*
+              _ => return Err(napi::Error::new(
+                napi::Status::InvalidArg,
+                format!("Unknown variant `{}`", type_),
+              )),
+            }
+
+            Ok(std::ptr::null_mut())
+          }
+        }
       }
     } else {
       quote! {}
@@ -1471,6 +1656,54 @@ impl NapiStruct {
 
     let array_len = array.fields.len() as u32;
 
+    let mut element_validators = vec![];
+    for (i, field) in array.fields.iter().enumerate() {
+      let mut ty = field.ty.clone();
+      remove_lifetime_in_type(&mut ty);
+      let is_optional_field = if let syn::Type::Path(syn::TypePath {
+        path: syn::Path { segments, .. },
+        ..
+      }) = &ty
+      {
+        if let Some(last_path) = segments.last() {
+          last_path.ident == "Option"
+        } else {
+          false
+        }
+      } else {
+        false
+      };
+
+      element_validators.push(quote! {
+        {
+          let mut property_value = std::ptr::null_mut();
+          napi::check_status!(
+            unsafe {
+              napi::sys::napi_get_element(env, napi_val, #i as u32, &mut property_value)
+            },
+            "Failed to get element"
+          )?;
+
+          let mut property_value_type = -1;
+          napi::check_status!(
+            unsafe { napi::sys::napi_typeof(env, property_value, &mut property_value_type) },
+            "Failed to get type of property value"
+          )?;
+
+          if property_value_type == napi::sys::ValueType::napi_undefined || property_value_type == napi::sys::ValueType::napi_null {
+            if !#is_optional_field {
+              return Err(napi::Error::new(
+                napi::Status::InvalidArg,
+                format!("Missing required element at index `{}`", #i)
+              ));
+            }
+          } else {
+            <#ty as napi::bindgen_prelude::ValidateNapiValue>::validate(env, property_value)?;
+          }
+        }
+      });
+    }
+
     let to_napi_value = if array.object_to_js {
       quote! {
         #[automatically_derived]
@@ -1519,7 +1752,42 @@ impl NapiStruct {
         }
 
         #[automatically_derived]
-        #validate_napi_value_impl {}
+        #validate_napi_value_impl {
+          unsafe fn validate(
+            env: napi::bindgen_prelude::sys::napi_env,
+            napi_val: napi::bindgen_prelude::sys::napi_value
+          ) -> napi::bindgen_prelude::Result<napi::bindgen_prelude::sys::napi_value> {
+            let mut is_array = false;
+            napi::check_status!(
+              unsafe { napi::sys::napi_is_array(env, napi_val, &mut is_array) },
+              "Failed to check if napi value is array"
+            )?;
+
+            if !is_array {
+              return Err(napi::Error::new(
+                napi::Status::InvalidArg,
+                "Expect value to be array"
+              ));
+            }
+
+            let mut length = 0;
+            napi::check_status!(
+              unsafe { napi::sys::napi_get_array_length(env, napi_val, &mut length) },
+              "Failed to get array length"
+            )?;
+
+            if length < #array_len {
+              return Err(napi::Error::new(
+                napi::Status::InvalidArg,
+                format!("Expect array length to be at least {}, but received {}", #array_len, length)
+              ));
+            }
+
+            #(#element_validators)*
+
+            Ok(std::ptr::null_mut())
+          }
+        }
       }
     } else {
       quote! {}

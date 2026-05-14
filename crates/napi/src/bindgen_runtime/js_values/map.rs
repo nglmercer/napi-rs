@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 use std::hash::{BuildHasher, Hash};
+use std::ptr;
 
 #[cfg(feature = "object_indexmap")]
 use indexmap::IndexMap;
@@ -16,7 +17,36 @@ impl<K, V, S> TypeName for HashMap<K, V, S> {
   }
 }
 
-impl<K: From<String> + Eq + Hash, V: FromNapiValue, S> ValidateNapiValue for HashMap<K, V, S> {}
+impl<K: From<String> + Eq + Hash, V: FromNapiValue + ValidateNapiValue, S> ValidateNapiValue
+  for HashMap<K, V, S>
+{
+  unsafe fn validate(env: sys::napi_env, napi_val: sys::napi_value) -> Result<sys::napi_value> {
+    let mut value_type = -1;
+    check_status!(
+      unsafe { sys::napi_typeof(env, napi_val, &mut value_type) },
+      "Failed to get type of napi value"
+    )?;
+    if value_type != sys::ValueType::napi_object {
+      return Err(Error::new(
+        Status::InvalidArg,
+        format!(
+          "Expect value to be object, but received {}",
+          ValueType::from(value_type)
+        ),
+      ));
+    }
+
+    let obj = unsafe { Object::from_napi_value(env, napi_val)? };
+    let keys = Object::keys(&obj)?;
+    for key in keys {
+      if let Some(val) = obj.get_inner(&key)? {
+        V::validate(env, val)?;
+      }
+    }
+
+    Ok(ptr::null_mut())
+  }
+}
 
 impl<K, V, S> ToNapiValue for HashMap<K, V, S>
 where
@@ -96,7 +126,36 @@ impl<K, V> TypeName for BTreeMap<K, V> {
   }
 }
 
-impl<K: From<String> + Ord, V: FromNapiValue> ValidateNapiValue for BTreeMap<K, V> {}
+impl<K: From<String> + Ord, V: FromNapiValue + ValidateNapiValue> ValidateNapiValue
+  for BTreeMap<K, V>
+{
+  unsafe fn validate(env: sys::napi_env, napi_val: sys::napi_value) -> Result<sys::napi_value> {
+    let mut value_type = -1;
+    check_status!(
+      unsafe { sys::napi_typeof(env, napi_val, &mut value_type) },
+      "Failed to get type of napi value"
+    )?;
+    if value_type != sys::ValueType::napi_object {
+      return Err(Error::new(
+        Status::InvalidArg,
+        format!(
+          "Expect value to be object, but received {}",
+          ValueType::from(value_type)
+        ),
+      ));
+    }
+
+    let obj = unsafe { Object::from_napi_value(env, napi_val)? };
+    let keys = Object::keys(&obj)?;
+    for key in keys {
+      if let Some(val) = obj.get_inner(&key)? {
+        V::validate(env, val)?;
+      }
+    }
+
+    Ok(ptr::null_mut())
+  }
+}
 
 impl<K, V> ToNapiValue for BTreeMap<K, V>
 where
@@ -176,7 +235,36 @@ impl<K, V, S> TypeName for IndexMap<K, V, S> {
 }
 
 #[cfg(feature = "object_indexmap")]
-impl<K: From<String> + Hash + Eq, V: FromNapiValue> ValidateNapiValue for IndexMap<K, V> {}
+impl<K: From<String> + Hash + Eq, V: FromNapiValue + ValidateNapiValue, S> ValidateNapiValue
+  for IndexMap<K, V, S>
+{
+  unsafe fn validate(env: sys::napi_env, napi_val: sys::napi_value) -> Result<sys::napi_value> {
+    let mut value_type = -1;
+    check_status!(
+      unsafe { sys::napi_typeof(env, napi_val, &mut value_type) },
+      "Failed to get type of napi value"
+    )?;
+    if value_type != sys::ValueType::napi_object {
+      return Err(Error::new(
+        Status::InvalidArg,
+        format!(
+          "Expect value to be object, but received {}",
+          ValueType::from(value_type)
+        ),
+      ));
+    }
+
+    let obj = unsafe { Object::from_napi_value(env, napi_val)? };
+    let keys = Object::keys(&obj)?;
+    for key in keys {
+      if let Some(val) = obj.get_inner(&key)? {
+        V::validate(env, val)?;
+      }
+    }
+
+    Ok(ptr::null_mut())
+  }
+}
 
 #[cfg(feature = "object_indexmap")]
 impl<K, V, S> ToNapiValue for IndexMap<K, V, S>

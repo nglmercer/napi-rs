@@ -5,7 +5,7 @@ use std::ptr;
 use serde_json::{Map, Number, Value};
 
 use crate::{
-  bindgen_runtime::{Null, Object},
+  bindgen_runtime::{Null, Object, TypeName},
   check_status, sys, type_of, Env, Error, Result, Status, ValueType,
 };
 
@@ -29,6 +29,22 @@ impl ToNapiValue for &Value {
 impl ToNapiValue for Value {
   unsafe fn to_napi_value(env: sys::napi_env, val: Self) -> Result<sys::napi_value> {
     ToNapiValue::to_napi_value(env, &val)
+  }
+}
+
+impl TypeName for Value {
+  fn type_name() -> &'static str {
+    "serde_json::Value"
+  }
+
+  fn value_type() -> ValueType {
+    ValueType::Unknown
+  }
+}
+
+impl crate::bindgen_runtime::ValidateNapiValue for Value {
+  unsafe fn validate(_env: sys::napi_env, _napi_val: sys::napi_value) -> Result<sys::napi_value> {
+    Ok(std::ptr::null_mut())
   }
 }
 
@@ -135,6 +151,36 @@ impl ToNapiValue for &Map<String, Value> {
 impl ToNapiValue for Map<String, Value> {
   unsafe fn to_napi_value(env: sys::napi_env, val: Self) -> Result<sys::napi_value> {
     ToNapiValue::to_napi_value(env, &val)
+  }
+}
+
+impl TypeName for Map<String, Value> {
+  fn type_name() -> &'static str {
+    "serde_json::Map<String, Value>"
+  }
+
+  fn value_type() -> ValueType {
+    ValueType::Object
+  }
+}
+
+impl crate::bindgen_runtime::ValidateNapiValue for Map<String, Value> {
+  unsafe fn validate(env: sys::napi_env, napi_val: sys::napi_value) -> Result<sys::napi_value> {
+    let mut value_type = -1;
+    check_status!(
+      unsafe { sys::napi_typeof(env, napi_val, &mut value_type) },
+      "Failed to get type of napi value"
+    )?;
+    if value_type != sys::ValueType::napi_object {
+      return Err(Error::new(
+        Status::InvalidArg,
+        format!(
+          "Expect value to be object, but received {}",
+          ValueType::from(value_type)
+        ),
+      ));
+    }
+    Ok(std::ptr::null_mut())
   }
 }
 
