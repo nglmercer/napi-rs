@@ -1066,6 +1066,10 @@ export interface PluginLoadResult {
 
 export declare function plusOne(this: Width): number
 
+export declare function processSerdeJson(input: any): string
+
+export declare function processSmallUserValidated(user: SmallUserSchema): string
+
 export interface ProfileSchema {
   username: string
   email: string
@@ -1193,6 +1197,11 @@ export declare function shorterEscapableScope(createString: () => string | null)
 export declare function shorterScope(arr: unknown[]): Array<number>
 
 export declare function shutdownRuntime(): void
+
+export interface SmallUserSchema {
+  id: number
+  name: string
+}
 
 export declare function spawnFutureLifetime(input: number): Promise<string>
 

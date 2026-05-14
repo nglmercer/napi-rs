@@ -204,9 +204,29 @@ pub fn save_to_dynamic_db_js(data: Object, schema: &DynamicSchema) -> Result<Str
 
   // 2. Lazy access
   let name: String = data.get_named_property_unchecked("name")?;
-  let age: f64 = data.get_named_property_unchecked("age")?;
+  let id: f64 = data.get_named_property_unchecked("id")?;
 
-  Ok(format!("Saved {} (age {}) to dynamic DB JS", name, age))
+  Ok(format!("Saved {} (id {}) to dynamic DB JS", name, id))
+}
+
+#[napi(object)]
+pub struct SmallUserSchema {
+  pub id: u32,
+  pub name: String,
+}
+
+#[napi]
+pub fn process_small_user_validated(user: Validated<SmallUserSchema>) -> Result<String> {
+  let name: String = user.get("name")?;
+  let id: u32 = user.get("id")?;
+  Ok(format!("Processed {} ({})", name, id))
+}
+
+#[napi]
+pub fn process_serde_json(input: serde_json::Value) -> Result<String> {
+  let name = input.get("name").and_then(|v| v.as_str()).unwrap_or("unknown");
+  let id = input.get("id").and_then(|v| v.as_u64()).unwrap_or(0);
+  Ok(format!("Processed {} ({})", name, id))
 }
 
 #[napi]

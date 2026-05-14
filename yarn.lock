@@ -423,6 +423,7 @@ __metadata:
     cross-env: "npm:10.1.0"
     electron: "npm:^42.0.0"
     lodash: "npm:^4.17.21"
+    mitata: "npm:^1.0.34"
     playwright: "npm:^1.56.1"
     rxjs: "npm:^7.8.2"
     sinon: "npm:^22.0.0"
@@ -9714,6 +9715,13 @@ __metadata:
   dependencies:
     minipass: "npm:^7.1.2"
   checksum: 10c0/5aad75ab0090b8266069c9aabe582c021ae53eb33c6c691054a13a45db3b4f91a7fb1bd79151e6b4e9e9a86727b522527c0a06ec7d45206b745d54cd3097bcec
+  languageName: node
+  linkType: hard
+
+"mitata@npm:^1.0.34":
+  version: 1.0.34
+  resolution: "mitata@npm:1.0.34"
+  checksum: 10c0/a78a0dd18203e47f444915e64e900e9686d5b6c53c461105f79a6b4795983a2f1fa573ce6fea697ebb29c31ff31b2e7e4f0ce072e0611e0313ebef274a0a5811
   languageName: node
   linkType: hard
 
