@@ -317,6 +317,14 @@ where
         "Expected an array".to_owned(),
       ));
     }
+    Ok(ptr::null_mut())
+  }
+
+  unsafe fn validate_recursive(
+    env: sys::napi_env,
+    napi_val: sys::napi_value,
+  ) -> Result<sys::napi_value> {
+    Self::validate(env, napi_val)?;
 
     let mut length = 0;
     check_status!(
@@ -330,7 +338,7 @@ where
         unsafe { sys::napi_get_element(env, napi_val, i, &mut element) },
         "Failed to get array element"
       )?;
-      T::validate(env, element)?;
+      T::validate_recursive(env, element)?;
     }
 
     Ok(ptr::null_mut())
@@ -372,7 +380,42 @@ macro_rules! tuple_from_napi_value {
 
 macro_rules! impl_tuple_validate_napi_value {
   ($($ident:ident),+) => {
-    impl<$($ident: FromNapiValue),*> ValidateNapiValue for ($($ident,)*) {}
+    impl<$($ident: FromNapiValue + ValidateNapiValue),*> ValidateNapiValue for ($($ident,)*) {
+      unsafe fn validate(env: sys::napi_env, napi_val: sys::napi_value) -> Result<sys::napi_value> {
+        let mut is_array = false;
+        check_status!(
+          unsafe { sys::napi_is_array(env, napi_val, &mut is_array) },
+          "Failed to check given napi value is array"
+        )?;
+        if !is_array {
+          return Err(Error::new(
+            Status::InvalidArg,
+            "Expected an array".to_owned(),
+          ));
+        }
+        Ok(ptr::null_mut())
+      }
+
+      unsafe fn validate_recursive(env: sys::napi_env, napi_val: sys::napi_value) -> Result<sys::napi_value> {
+        Self::validate(env, napi_val)?;
+
+        let mut i = 0;
+        $(
+          {
+            let mut element = ptr::null_mut();
+            check_status!(
+              unsafe { sys::napi_get_element(env, napi_val, i, &mut element) },
+              "Failed to get array element"
+            )?;
+            $ident::validate_recursive(env, element)?;
+            i += 1;
+          }
+        )*
+        let _ = i;
+
+        Ok(ptr::null_mut())
+      }
+    }
     impl<$($ident: FromNapiValue),*> TypeName for ($($ident,)*) {
       fn type_name() -> &'static str {
         concat!("Tuple", "(", $(stringify!($ident), ","),*, ")")

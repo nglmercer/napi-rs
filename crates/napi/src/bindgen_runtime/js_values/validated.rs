@@ -54,7 +54,14 @@ impl<T: TypeName> TypeName for Validated<T> {
 
 impl<T: ValidateNapiValue> ValidateNapiValue for Validated<T> {
   unsafe fn validate(env: sys::napi_env, napi_val: sys::napi_value) -> Result<sys::napi_value> {
-    T::validate(env, napi_val)
+    T::validate_recursive(env, napi_val)
+  }
+
+  unsafe fn validate_recursive(
+    env: sys::napi_env,
+    napi_val: sys::napi_value,
+  ) -> Result<sys::napi_value> {
+    T::validate_recursive(env, napi_val)
   }
 }
 
@@ -62,6 +69,15 @@ impl<T> Validated<T>
 where
   T: ValidateNapiValue,
 {
+  /// Parse an `Unknown` value into a `Validated<T>`.
+  /// This will perform recursive validation.
+  pub fn parse(unknown: Unknown) -> Result<Self> {
+    unsafe {
+      T::validate_recursive(unknown.0.env, unknown.0.value)?;
+      Self::from_napi_value(unknown.0.env, unknown.0.value)
+    }
+  }
+
   /// Create a new validated object in the given environment.
   pub fn new_in(env: &Env) -> Result<Self> {
     let obj = Object::new(env)?;
@@ -96,7 +112,28 @@ where
   {
     self.set_named_property(key, value)
   }
+
+  /// Get an element from the object (if it's an array).
+  pub fn get_element<V>(&self, index: u32) -> Result<V>
+  where
+    V: FromNapiValue + ValidateNapiValue,
+  {
+    JsObjectValue::get_element(self, index)
+  }
+
+  /// Set an element on the object (if it's an array).
+  pub fn set_element<V>(&mut self, index: u32, value: V) -> Result<()>
+  where
+    V: ToNapiValue,
+  {
+    unsafe {
+      let env = self.value.env;
+      let val = V::to_napi_value(env, value)?;
+      check_status!(sys::napi_set_element(env, self.value.value, index, val))
+    }
+  }
 }
+
 
 #[cfg(test)]
 mod tests {

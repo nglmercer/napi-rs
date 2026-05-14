@@ -46,6 +46,35 @@ impl crate::bindgen_runtime::ValidateNapiValue for Value {
   unsafe fn validate(_env: sys::napi_env, _napi_val: sys::napi_value) -> Result<sys::napi_value> {
     Ok(std::ptr::null_mut())
   }
+
+  unsafe fn validate_recursive(
+    env: sys::napi_env,
+    napi_val: sys::napi_value,
+  ) -> Result<sys::napi_value> {
+    let ty = type_of!(env, napi_val)?;
+    match ty {
+      ValueType::Function | ValueType::Symbol | ValueType::External | ValueType::Undefined => {
+        Err(Error::new(
+          Status::InvalidArg,
+          format!("{ty} cannot be represented as a serde_json::Value"),
+        ))
+      }
+      ValueType::Object => {
+        let mut is_arr = false;
+        check_status!(
+          unsafe { sys::napi_is_array(env, napi_val, &mut is_arr) },
+          "Failed to detect whether given js is an array"
+        )?;
+
+        if is_arr {
+          Vec::<Value>::validate_recursive(env, napi_val)
+        } else {
+          Map::<String, Value>::validate_recursive(env, napi_val)
+        }
+      }
+      _ => Ok(std::ptr::null_mut()),
+    }
+  }
 }
 
 impl FromNapiValue for Value {
@@ -181,6 +210,30 @@ impl crate::bindgen_runtime::ValidateNapiValue for Map<String, Value> {
       ));
     }
     Ok(std::ptr::null_mut())
+  }
+
+  unsafe fn validate_recursive(
+    env: sys::napi_env,
+    napi_val: sys::napi_value,
+  ) -> Result<sys::napi_value> {
+    Self::validate(env, napi_val)?;
+
+    let obj = Object(
+      crate::Value {
+        env,
+        value: napi_val,
+        value_type: ValueType::Object,
+      },
+      PhantomData,
+    );
+    let keys = Object::keys(&obj)?;
+    for key in keys {
+      if let Some(val) = obj.get_inner(&key)? {
+        Value::validate_recursive(env, val)?;
+      }
+    }
+
+    Ok(ptr::null_mut())
   }
 }
 

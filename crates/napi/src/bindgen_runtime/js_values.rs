@@ -185,6 +185,20 @@ pub trait ValidateNapiValue: TypeName {
       ))
     }
   }
+
+  /// This function called to validate whether napi value passed to rust is valid type recursively.
+  ///
+  /// # Safety
+  ///
+  /// The caller must ensure that:
+  /// - The `env` is a valid napi env pointer
+  /// - The `napi_val` is a valid js value pointer
+  unsafe fn validate_recursive(
+    env: sys::napi_env,
+    napi_val: sys::napi_value,
+  ) -> Result<sys::napi_value> {
+    Self::validate(env, napi_val)
+  }
 }
 
 impl<T: TypeName> TypeName for Option<T> {
@@ -219,6 +233,24 @@ impl<T: ValidateNapiValue> ValidateNapiValue for Option<T> {
           received_type
         ),
       ))
+    }
+  }
+
+  unsafe fn validate_recursive(
+    env: sys::napi_env,
+    napi_val: sys::napi_value,
+  ) -> Result<sys::napi_value> {
+    let mut result = -1;
+    check_status!(
+      unsafe { sys::napi_typeof(env, napi_val, &mut result) },
+      "Failed to detect napi value type",
+    )?;
+
+    let received_type = ValueType::from(result);
+    if received_type == ValueType::Null || received_type == ValueType::Undefined {
+      Ok(ptr::null_mut())
+    } else {
+      T::validate_recursive(env, napi_val)
     }
   }
 }
@@ -315,6 +347,13 @@ impl<T: ValidateNapiValue> ValidateNapiValue for Rc<T> {
       ))
     }
   }
+
+  unsafe fn validate_recursive(
+    env: sys::napi_env,
+    napi_val: sys::napi_value,
+  ) -> Result<sys::napi_value> {
+    T::validate_recursive(env, napi_val)
+  }
 }
 
 impl<T> FromNapiValue for Rc<T>
@@ -385,6 +424,13 @@ impl<T: ValidateNapiValue> ValidateNapiValue for Arc<T> {
       ))
     }
   }
+
+  unsafe fn validate_recursive(
+    env: sys::napi_env,
+    napi_val: sys::napi_value,
+  ) -> Result<sys::napi_value> {
+    T::validate_recursive(env, napi_val)
+  }
 }
 
 impl<T> FromNapiValue for Arc<T>
@@ -454,6 +500,13 @@ impl<T: ValidateNapiValue> ValidateNapiValue for Mutex<T> {
         ),
       ))
     }
+  }
+
+  unsafe fn validate_recursive(
+    env: sys::napi_env,
+    napi_val: sys::napi_value,
+  ) -> Result<sys::napi_value> {
+    T::validate_recursive(env, napi_val)
   }
 }
 

@@ -16,7 +16,60 @@ impl<V, S> TypeName for HashSet<V, S> {
   }
 }
 
-impl<V: FromNapiValue, S> ValidateNapiValue for HashSet<V, S> {}
+impl<V: FromNapiValue + ValidateNapiValue, S> ValidateNapiValue for HashSet<V, S> {
+  unsafe fn validate(env: sys::napi_env, napi_val: sys::napi_value) -> Result<sys::napi_value> {
+    let mut is_set = false;
+    let mut global = std::ptr::null_mut();
+    check_status!(
+      unsafe { sys::napi_get_global(env, &mut global) },
+      "Failed to get global object"
+    )?;
+    let mut set_constructor = std::ptr::null_mut();
+    check_status!(
+      unsafe {
+        sys::napi_get_named_property(
+          env,
+          global,
+          c"Set".as_ptr().cast(),
+          &mut set_constructor,
+        )
+      },
+      "Failed to get Set constructor"
+    )?;
+    check_status!(
+      unsafe { sys::napi_instanceof(env, napi_val, set_constructor, &mut is_set) },
+      "Failed to check if value is an instance of Set"
+    )?;
+    if !is_set {
+      return Err(Error::new(
+        Status::InvalidArg,
+        "Expected a Set object".to_owned(),
+      ));
+    }
+    Ok(std::ptr::null_mut())
+  }
+
+  unsafe fn validate_recursive(
+    env: sys::napi_env,
+    napi_val: sys::napi_value,
+  ) -> Result<sys::napi_value> {
+    Self::validate(env, napi_val)?;
+    let obj = Object::from_raw(env, napi_val);
+    let iter_creator: Function<'_, (), Object> = obj.get_named_property("values")?;
+    let iter = iter_creator.apply(obj, ())?;
+    let next: Function<'_, (), Object> = iter.get_named_property("next")?;
+    while {
+      let o: Object = next.apply(iter, ())?;
+      let done: bool = o.get_named_property("done")?;
+      if !done {
+        let v = o.get_named_property_unchecked::<Unknown>("value")?;
+        V::validate_recursive(env, v.0.value)?;
+      }
+      !done
+    } {}
+    Ok(std::ptr::null_mut())
+  }
+}
 
 impl<V, S> ToNapiValue for HashSet<V, S>
 where
@@ -66,7 +119,18 @@ impl<V> TypeName for BTreeSet<V> {
   }
 }
 
-impl<V: FromNapiValue> ValidateNapiValue for BTreeSet<V> {}
+impl<V: FromNapiValue + ValidateNapiValue> ValidateNapiValue for BTreeSet<V> {
+  unsafe fn validate(env: sys::napi_env, napi_val: sys::napi_value) -> Result<sys::napi_value> {
+    HashSet::<V, std::collections::hash_map::RandomState>::validate(env, napi_val)
+  }
+
+  unsafe fn validate_recursive(
+    env: sys::napi_env,
+    napi_val: sys::napi_value,
+  ) -> Result<sys::napi_value> {
+    HashSet::<V, std::collections::hash_map::RandomState>::validate_recursive(env, napi_val)
+  }
+}
 
 impl<V> ToNapiValue for BTreeSet<V>
 where
@@ -116,7 +180,18 @@ impl<V, S> TypeName for IndexSet<V, S> {
   }
 }
 #[cfg(feature = "object_indexmap")]
-impl<V: FromNapiValue, S> ValidateNapiValue for IndexSet<V, S> {}
+impl<V: FromNapiValue + ValidateNapiValue, S> ValidateNapiValue for IndexSet<V, S> {
+  unsafe fn validate(env: sys::napi_env, napi_val: sys::napi_value) -> Result<sys::napi_value> {
+    HashSet::<V, S>::validate(env, napi_val)
+  }
+
+  unsafe fn validate_recursive(
+    env: sys::napi_env,
+    napi_val: sys::napi_value,
+  ) -> Result<sys::napi_value> {
+    HashSet::<V, S>::validate_recursive(env, napi_val)
+  }
+}
 #[cfg(feature = "object_indexmap")]
 impl<V, S> ToNapiValue for IndexSet<V, S>
 where

@@ -399,6 +399,8 @@ export interface A {
 
 export declare function acceptArraybuffer(fixture: ArrayBuffer): bigint
 
+export declare function acceptDeepValidatedObject(obj: DeepObject): number
+
 export declare function acceptSlice(fixture: Uint8Array): bigint
 
 export declare function acceptStream(stream: ReadableStream<Uint8Array>): Promise<Buffer>
@@ -416,6 +418,8 @@ export declare function acceptUint8ClampedSlice(input: Uint8ClampedArray): bigin
 export declare function acceptUint8ClampedSliceAndBufferSlice(a: Buffer, b: Uint8ClampedArray): bigint
 
 export declare function acceptUntypedTypedArray(input: TypedArray): bigint
+
+export declare function acceptValidatedObject(obj: MainObject): number
 
 export declare function add(a: number, b: number): number
 
@@ -697,6 +701,8 @@ export declare function createUint8ClampedArrayFromData(): Uint8ClampedArray
 
 export declare function createUint8ClampedArrayFromExternal(): Uint8ClampedArray
 
+export declare function createValidatedObject(): MainObject
+
 export declare function createZeroCopyLatin1String(): string
 
 export declare function createZeroCopyUtf16String(): string
@@ -734,6 +740,11 @@ export interface DatesWithTimeZone {
 }
 
 export declare function dateToNumber(input: Date): number
+
+export interface DeepObject {
+  list: Array<number>
+  map: Record<string, NestedObject>
+}
 
 /** This is a const */
 export const DEFAULT_COST: number
@@ -917,6 +928,12 @@ export interface LocalDates {
   end?: Date
 }
 
+export interface MainObject {
+  name: string
+  nested: NestedObject
+  optional?: number
+}
+
 export declare function mapOption(val?: number | undefined | null): number | null
 
 export declare function mergeTupleArray(t1: TupleToArray, t2: TupleToArray): TupleToArray
@@ -942,6 +959,10 @@ export type MyVec =
 /** Nested metadata for demonstrating object streaming with complex types */
 export interface NestedMetadata {
   hello: string
+}
+
+export interface NestedObject {
+  count: number
 }
 
 export interface NotUseNullableStruct {

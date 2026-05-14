@@ -35,12 +35,20 @@ impl<K: From<String> + Eq + Hash, V: FromNapiValue + ValidateNapiValue, S> Valid
         ),
       ));
     }
+    Ok(ptr::null_mut())
+  }
+
+  unsafe fn validate_recursive(
+    env: sys::napi_env,
+    napi_val: sys::napi_value,
+  ) -> Result<sys::napi_value> {
+    Self::validate(env, napi_val)?;
 
     let obj = unsafe { Object::from_napi_value(env, napi_val)? };
     let keys = Object::keys(&obj)?;
     for key in keys {
       if let Some(val) = obj.get_inner(&key)? {
-        V::validate(env, val)?;
+        V::validate_recursive(env, val)?;
       }
     }
 
@@ -144,12 +152,20 @@ impl<K: From<String> + Ord, V: FromNapiValue + ValidateNapiValue> ValidateNapiVa
         ),
       ));
     }
+    Ok(ptr::null_mut())
+  }
+
+  unsafe fn validate_recursive(
+    env: sys::napi_env,
+    napi_val: sys::napi_value,
+  ) -> Result<sys::napi_value> {
+    Self::validate(env, napi_val)?;
 
     let obj = unsafe { Object::from_napi_value(env, napi_val)? };
     let keys = Object::keys(&obj)?;
     for key in keys {
       if let Some(val) = obj.get_inner(&key)? {
-        V::validate(env, val)?;
+        V::validate_recursive(env, val)?;
       }
     }
 
@@ -253,12 +269,20 @@ impl<K: From<String> + Hash + Eq, V: FromNapiValue + ValidateNapiValue, S> Valid
         ),
       ));
     }
+    Ok(ptr::null_mut())
+  }
+
+  unsafe fn validate_recursive(
+    env: sys::napi_env,
+    napi_val: sys::napi_value,
+  ) -> Result<sys::napi_value> {
+    Self::validate(env, napi_val)?;
 
     let obj = unsafe { Object::from_napi_value(env, napi_val)? };
     let keys = Object::keys(&obj)?;
     for key in keys {
       if let Some(val) = obj.get_inner(&key)? {
-        V::validate(env, val)?;
+        V::validate_recursive(env, val)?;
       }
     }
 

@@ -111,11 +111,50 @@ macro_rules! either_n {
               false
             }
           } {
-            ret
+            return ret;
           } else
         )+
         {
-          ret
+          Err(crate::Error::new(
+            Status::InvalidArg,
+            format!(
+              concat!("Value is none of these types ", $( "`{", stringify!( $parameter ), "}`, " ),+ ),
+              $( $parameter = $parameter::type_name(), )+
+            ),
+          ))
+        }
+      }
+
+      unsafe fn validate_recursive(
+        env: sys::napi_env,
+        napi_val: sys::napi_value,
+      ) -> crate::Result<sys::napi_value> {
+        let mut ret: crate::Result<sys::napi_value>;
+        $(
+          if unsafe {
+            ret = $parameter::validate_recursive(env, napi_val);
+            if let Ok(maybe_rejected_promise) = ret.as_ref() {
+              if maybe_rejected_promise.is_null() {
+                true
+              } else {
+                silence_rejected_promise(env, *maybe_rejected_promise)?;
+                false
+              }
+            } else {
+              false
+            }
+          } {
+            return ret;
+          } else
+        )+
+        {
+          Err(crate::Error::new(
+            Status::InvalidArg,
+            format!(
+              concat!("Value is none of these types ", $( "`{", stringify!( $parameter ), "}`, " ),+ ),
+              $( $parameter = $parameter::type_name(), )+
+            ),
+          ))
         }
       }
     }
