@@ -79,6 +79,137 @@ pub fn validate_and_process_dynamic(input: Unknown) -> Result<String> {
 }
 
 #[napi]
+pub enum DynamicSchemaType {
+  String,
+  Number,
+  Boolean,
+}
+
+#[napi]
+pub struct DynamicSchema {
+  #[napi(skip)]
+  pub fields: std::collections::HashMap<String, DynamicSchemaType>,
+}
+
+#[napi]
+impl DynamicSchema {
+  #[napi(constructor)]
+  pub fn new(fields: std::collections::HashMap<String, DynamicSchemaType>) -> Self {
+    Self { fields }
+  }
+}
+
+/// A dynamically validated object whose schema is defined at runtime in Node.js.
+/// This allows for zero-copy access even when the schema is not known at Rust compile-time.
+#[napi]
+pub struct DynamicValidated {
+  inner: ObjectRef<false>,
+}
+
+#[napi]
+impl DynamicValidated {
+  #[napi(factory)]
+  pub fn parse(input: Object, schema: &DynamicSchema) -> Result<Self> {
+    for (name, ty) in &schema.fields {
+      let val = input.get_inner(name.as_str())?.ok_or_else(|| {
+        Error::new(Status::InvalidArg, format!("Field {} is missing", name))
+      })?;
+
+      let received = type_of!(input.value().env, val)?;
+
+      match ty {
+        DynamicSchemaType::String => {
+          if received != ValueType::String {
+            return Err(Error::new(
+              Status::InvalidArg,
+              format!("Field {} expect String, received {}", name, received),
+            ));
+          }
+        }
+        DynamicSchemaType::Number => {
+          if received != ValueType::Number {
+            return Err(Error::new(
+              Status::InvalidArg,
+              format!("Field {} expect Number, received {}", name, received),
+            ));
+          }
+        }
+        DynamicSchemaType::Boolean => {
+          if received != ValueType::Boolean {
+            return Err(Error::new(
+              Status::InvalidArg,
+              format!("Field {} expect Boolean, received {}", name, received),
+            ));
+          }
+        }
+      }
+    }
+    Ok(Self {
+      inner: input.create_ref::<false>()?,
+    })
+  }
+
+  #[napi]
+  pub fn get_string(&self, env: Env, name: String) -> Result<String> {
+    self.inner.get_value(&env)?.get_named_property_unchecked(&name)
+  }
+
+  #[napi]
+  pub fn get_number(&self, env: Env, name: String) -> Result<f64> {
+    self.inner.get_value(&env)?.get_named_property_unchecked(&name)
+  }
+
+  #[napi]
+  pub fn get_boolean(&self, env: Env, name: String) -> Result<bool> {
+    self.inner.get_value(&env)?.get_named_property_unchecked(&name)
+  }
+}
+
+#[napi]
+pub fn save_to_dynamic_db(env: Env, data: &DynamicValidated) -> Result<String> {
+  // Access data lazily and zero-copy
+  let name = data.get_string(env, "name".to_owned())?;
+  let age = data.get_number(env, "age".to_owned())?;
+
+  Ok(format!("Saved {} (age {}) to dynamic DB", name, age))
+}
+
+#[napi]
+pub fn save_to_dynamic_db_js(data: Object, schema: &DynamicSchema) -> Result<String> {
+  // 1. Dynamic validation (zero-copy)
+  for (name, ty) in &schema.fields {
+    let val = data.get_inner(name.as_str())?.ok_or_else(|| {
+      Error::new(Status::InvalidArg, format!("Field {} is missing", name))
+    })?;
+
+    let received = type_of!(data.value().env, val)?;
+    match ty {
+      DynamicSchemaType::String => {
+        if received != ValueType::String {
+          return Err(Error::new(Status::InvalidArg, format!("Field {} expect String", name)));
+        }
+      }
+      DynamicSchemaType::Number => {
+        if received != ValueType::Number {
+          return Err(Error::new(Status::InvalidArg, format!("Field {} expect Number", name)));
+        }
+      }
+      DynamicSchemaType::Boolean => {
+        if received != ValueType::Boolean {
+          return Err(Error::new(Status::InvalidArg, format!("Field {} expect Boolean", name)));
+        }
+      }
+    }
+  }
+
+  // 2. Lazy access
+  let name: String = data.get_named_property_unchecked("name")?;
+  let age: f64 = data.get_named_property_unchecked("age")?;
+
+  Ok(format!("Saved {} (age {}) to dynamic DB JS", name, age))
+}
+
+#[napi]
 pub fn create_validated_object(env: Env) -> Result<Validated<MainObject>> {
   let mut obj = Validated::<MainObject>::new_in(&env)?;
   obj.set("name", "hello")?;

@@ -5,7 +5,12 @@ import {
   createValidatedObject,
   acceptDeepValidatedObject,
   saveUserToCustomDb,
-  validateAndProcessDynamic
+  validateAndProcessDynamic,
+  DynamicSchema,
+  DynamicSchemaType,
+  DynamicValidated,
+  saveToDynamicDb,
+  saveToDynamicDbJs
 } from '../index.cjs'
 
 test('should be able to accept validated object', (t) => {
@@ -92,4 +97,35 @@ test('dynamic validation parse example', (t) => {
   t.is(validateAndProcessDynamic(user), 'Dynamic validation successful for user ID 456')
 
   t.throws(() => validateAndProcessDynamic({ id: 'not a number' } as any))
+})
+
+test('Dynamic schema and validation example (ORM style)', (t) => {
+  // 1. Define schema in Node.js (runtime)
+  const schema = new DynamicSchema({
+    name: DynamicSchemaType.String,
+    age: DynamicSchemaType.Number,
+    isActive: DynamicSchemaType.Boolean
+  })
+
+  // 2. Data from JS
+  const data = {
+    name: 'Dynamic User',
+    age: 30,
+    isActive: true,
+    extra: 'ignored' // zero-copy: we ignore what we don't need
+  }
+
+  // 3. Parse and use in Rust (zero-copy)
+  const validated = DynamicValidated.parse(data, schema)
+  t.is(saveToDynamicDb(validated), 'Saved Dynamic User (age 30) to dynamic DB')
+
+  t.is(validated.getString('name'), 'Dynamic User')
+  t.is(validated.getNumber('age'), 30)
+  t.is(validated.getBoolean('isActive'), true)
+
+  // 4. Invalid data should fail validation
+  t.throws(() => DynamicValidated.parse({ name: 123 } as any, schema))
+
+  // 5. saveToDynamicDbJs
+  t.is(saveToDynamicDbJs(data, schema), 'Saved Dynamic User (age 30) to dynamic DB JS')
 })

@@ -236,6 +236,21 @@ export declare class Dog {
   constructor(name: string)
 }
 
+export declare class DynamicSchema {
+  constructor(fields: Record<string, DynamicSchemaType>)
+}
+
+/**
+ * A dynamically validated object whose schema is defined at runtime in Node.js.
+ * This allows for zero-copy access even when the schema is not known at Rust compile-time.
+ */
+export declare class DynamicValidated {
+  static parse(input: object, schema: DynamicSchema): DynamicValidated
+  getString(name: string): string
+  getNumber(name: string): number
+  getBoolean(name: string): boolean
+}
+
 /**
  * This type extends JavaScript's `Iterator`, and so has the iterator helper
  * methods. It may extend the upcoming TypeScript `Iterator` class in the future.
@@ -765,6 +780,12 @@ class DynamicRustClass {
 
 export declare function derefUint8Array(a: Uint8Array, b: Uint8ClampedArray): number
 
+export declare const enum DynamicSchemaType {
+  String = 0,
+  Number = 1,
+  Boolean = 2
+}
+
 export declare function either3(input: string | number | boolean): number
 
 export declare function either4(input: string | number | boolean | Obj): number
@@ -1150,6 +1171,10 @@ export type RuleHandler<Args, Ret> =
   (arg: Args) => Ret
 
 export declare function runScript(script: string): unknown
+
+export declare function saveToDynamicDb(data: DynamicValidated): string
+
+export declare function saveToDynamicDbJs(data: object, schema: DynamicSchema): string
 
 /**
  * A hypothetical "CustomDB" that saves a user.
